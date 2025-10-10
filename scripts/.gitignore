@@ -1,0 +1,27 @@
+# Environment
+.env
+venv/
+env/
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Data (optional - exclude large files)
+data/processed/emails_clean.csv
+
+# Logs
+*.log
+scripts/ml_pred_model.ipynb
+scripts/ingest_data.py
