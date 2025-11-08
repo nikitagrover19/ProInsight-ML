@@ -1,6 +1,6 @@
 
 
-# 🧠 Email Insight Classifier
+# 🧠 ProInsight - Email Insight Classifier
 
 This project applies **Machine Learning** and **Natural Language Processing (NLP)** techniques to analyze and classify corporate emails from the **[Enron Email Dataset](https://www.kaggle.com/datasets/wcukierski/enron-email-dataset)**.  
 It extracts semantic patterns, relationships, and insights from large-scale email communication data to help visualize and interpret professional correspondence.
