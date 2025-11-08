@@ -1,27 +1,60 @@
-# Environment
-.env
-venv/
-env/
-*.env
-
-# Python
+# --- Python ---
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
+*.pyc
+*.pyo
+*.pyd
+*.ipynb_checkpoints/
+.env
+.venv/
+venv/
+.envrc
+*.log
 .DS_Store
 
-# Data (optional - exclude large files)
-data/processed/emails_clean.csv
+# --- Data Files ---
+/data/raw/*
+/data/processed/*
+!data/README.md        # keep data folder but ignore actual datasets
+*.csv
+*.xlsx
+*.json
 
-# Logs
-*.log
-scripts/ml_pred_model.ipynb
-scripts/ingest_data.py
+# --- Jupyter Notebook Outputs ---
+.ipynb_checkpoints/
+*.nbconvert.ipynb
+
+# --- VSCode / IDE ---
+.vscode/
+.idea/
+*.code-workspace
+
+# --- Node / Frontend ---
+node_modules/
+dist/
+build/
+*.lock
+.env.local
+.env.production
+package-lock.json
+
+# --- System / OS Files ---
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# --- Cache & Temp ---
+__cache__/
+*.cache
+*.tmp
+*.bak
+
+# --- Model / Pickle Files ---
+*.pkl
+*.h5
+*.joblib
+models/
+
+# --- API Keys / Credentials ---
+.env
+secrets.json
+apikey.txt
