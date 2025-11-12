@@ -1,4 +1,4 @@
-# %%
+
 
 from collections import defaultdict
 import pandas as pd
@@ -16,35 +16,28 @@ import seaborn as sns
 import pickle
 
 
-# %%
+
 CHUNK_SIZE = 50000       # max chars per chunk
 BATCH_SIZE = 32          # nlp.pipe batch size
 
 PROJECT_KEYWORDS = ["project", "task", "deadline", "report"]
 
 
-# %%
 
-# Load cleaned dataset
+
+
 df = pd.read_csv("/Users/nikitagrover/ml+proj/data/processed/emails_clean.csv")
 
-# Load NLP model
+
 nlp = spacy.load("en_core_web_sm")
 nlp.max_length = 5_000_000 
 
 
 
-# %%
-# project_keywords = ["project", "task", "deadline", "report"]
 
-# Store project-level emails
 project_emails = defaultdict(list)
 
 
-# %%
-# Use nlp.pipe for faster batch processing
-# texts = df['Body'].astype(str).tolist()
-# docs = nlp.pipe(texts, batch_size=32, n_process=1)  # Adjust n_process based on CPU cores
 
 def split_text(text, chunk_size=50000):
     """Split long text into chunks of max chunk_size characters."""
@@ -78,10 +71,10 @@ for idx, row in df.iterrows():
     if (idx + 1) % 50 == 0 or (idx + 1) == len(df):
         print(f"Processed {idx + 1} / {len(df)} emails")
 
-print(f"✅ Found {len(project_emails)} projects with associated emails")
+print(f" Found {len(project_emails)} projects with associated emails")
 
 
-# %%
+
 import re
 from spacy.lang.en.stop_words import STOP_WORDS
 
@@ -99,7 +92,7 @@ for project, emails in project_emails.items():
     if norm_name:
         normalized_emails[norm_name].extend(emails)
 
-print(f"✅ Normalized to {len(normalized_emails)} unique project names")
+print(f" Normalized to {len(normalized_emails)} unique project names")
 
 # Save results (CSV)
 output_rows = []
@@ -124,35 +117,32 @@ print("📁 Step 1: Loading your existing project_emails.csv...")
 
 try:
     df = pd.read_csv("/Users/nikitagrover/ml+proj/data/project_emails.csv")
-    print(f"✅ Loaded {len(df)} rows from project_emails.csv")
-    print(f"📊 Columns: {list(df.columns)}")
-    print(f"📂 Unique projects: {df['project'].nunique()}")
-    print(f"📧 Total emails: {len(df)}")
+    print(f" Loaded {len(df)} rows from project_emails.csv")
+    print(f" Columns: {list(df.columns)}")
+    print(f" Unique projects: {df['project'].nunique()}")
+    print(f" Total emails: {len(df)}")
 except FileNotFoundError:
-    print("❌ project_emails.csv not found!")
-    print("💡 Make sure the file exists at: /Users/nikitagrover/ml+proj/data/project_emails.csv")
+    print(" project_emails.csv not found!")
+    print(" Make sure the file exists at: /Users/nikitagrover/ml+proj/data/project_emails.csv")
     exit(1)
 except Exception as e:
-    print(f"❌ Error loading CSV: {e}")
+    print(f" Error loading CSV: {e}")
     exit(1)
 
 # Show sample data
-print(f"\n📋 Sample data:")
+print(f"\n Sample data:")
 print(df.head(3))
 
 
-# %%
-# ===================================
-# STEP 2: SMART SAMPLING FOR LARGE DATASET
-# ===================================
-print(f"\n🔄 Step 2: Smart sampling for efficient processing...")
+
+print(f"\n Step 2: Smart sampling for efficient processing...")
 
 # With 220k+ projects, we need to sample intelligently
-print("🎯 Large dataset detected - implementing smart sampling strategy")
+print("Large dataset detected - implementing smart sampling strategy")
 
 # Get project email counts
 project_counts = df['project'].value_counts()
-print(f"📊 Project size distribution:")
+print(f" Project size distribution:")
 print(f"   Projects with 1 email: {(project_counts == 1).sum()}")
 print(f"   Projects with 2-5 emails: {((project_counts >= 2) & (project_counts <= 5)).sum()}")
 print(f"   Projects with 6-20 emails: {((project_counts >= 6) & (project_counts <= 20)).sum()}")
@@ -168,7 +158,7 @@ MAX_PROJECTS = 20000  # Reasonable size for ML training
 
 # Filter projects with minimum emails
 valid_projects = project_counts[project_counts >= MIN_EMAILS]
-print(f"✅ Projects with {MIN_EMAILS}+ emails: {len(valid_projects)}")
+print(f" Projects with {MIN_EMAILS}+ emails: {len(valid_projects)}")
 
 # Sample projects, prioritizing those with more emails
 if len(valid_projects) > MAX_PROJECTS:
@@ -184,21 +174,21 @@ if len(valid_projects) > MAX_PROJECTS:
         p=sample_probs
     )
     
-    print(f"🎲 Sampled {MAX_PROJECTS} projects for training")
+    print(f" Sampled {MAX_PROJECTS} projects for training")
     selected_projects = valid_projects[sampled_projects]
 else:
     selected_projects = valid_projects
-    print(f"✅ Using all {len(selected_projects)} valid projects")
+    print(f" Using all {len(selected_projects)} valid projects")
 
 # Filter dataframe to selected projects
 df_filtered = df[df['project'].isin(selected_projects.index)].copy()
-print(f"📊 Filtered dataset: {len(df_filtered)} emails from {len(selected_projects)} projects")
+print(f"Filtered dataset: {len(df_filtered)} emails from {len(selected_projects)} projects")
 
 # Group emails by project (now manageable size)
 project_groups = df_filtered.groupby('project')
 project_data = {}
 
-print("🔄 Processing selected projects...")
+print("Processing selected projects...")
 processed_count = 0
 total_selected = len(selected_projects)
 
@@ -216,11 +206,11 @@ for project_name, group in project_groups:
     if processed_count % 1000 == 0 or processed_count == total_selected:
         print(f"   Processed {processed_count}/{total_selected} projects...")
 
-print(f"✅ Processed {len(project_data)} projects")
+print(f" Processed {len(project_data)} projects")
 
 # Show final stats
 email_counts = [data['email_count'] for data in project_data.values()]
-print(f"📈 Final dataset stats:")
+print(f" Final dataset stats:")
 print(f"   Projects: {len(project_data)}")
 print(f"   Total emails: {sum(email_counts)}")
 print(f"   Min emails per project: {min(email_counts)}")
@@ -228,14 +218,13 @@ print(f"   Max emails per project: {max(email_counts)}")
 print(f"   Average emails per project: {np.mean(email_counts):.1f}")
 
 # Show sample of selected projects
-print(f"\n📋 Sample of selected projects:")
+print(f"\n Sample of selected projects:")
 sample_projects = list(project_data.keys())[:5]
 for i, project in enumerate(sample_projects, 1):
     email_count = project_data[project]['email_count']
     print(f"   {i}. {project[:50]:<50} ({email_count} emails)")
 
 
-# %%
 SUCCESS_KEYWORDS = [
     # Completion & Achievement
     "completed", "successful", "achieved", "delivered", "finished", "accomplished", 
@@ -307,9 +296,8 @@ FAILURE_KEYWORDS = [
     "bottleneck", "roadblock", "hurdle", "barrier", "constraint"
 ]
 
-# ===================================
 # ENHANCED LABELING FUNCTION
-# ===================================
+
 def enhanced_label_project_emails(emails):
     """Enhanced labeling with multiple signals and confidence scoring."""
     if not emails:
@@ -420,9 +408,9 @@ def enhanced_label_project_emails(emails):
     
     return label, confidence, reasoning
 
-# ===================================
+
 # HIGH ACCURACY MODEL CONFIGURATION
-# ===================================
+
 def train_high_accuracy_model(project_names, labels):
     """Train ensemble model for maximum accuracy."""
     from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier
@@ -445,7 +433,7 @@ def train_high_accuracy_model(project_names, labels):
     X = vectorizer.fit_transform(project_names)
     y = np.array(labels)
     
-    print(f"🔤 Enhanced TF-IDF feature matrix: {X.shape}")
+    print(f"Enhanced TF-IDF feature matrix: {X.shape}")
     
     # Create ensemble of multiple models
     rf_model = RandomForestClassifier(
@@ -484,10 +472,10 @@ def train_high_accuracy_model(project_names, labels):
     
     return ensemble_model, vectorizer
 
-# ===================================
-# REPLACE YOUR LABELING SECTION WITH THIS
-# ===================================
-print(f"\n🔄 Step 3: Enhanced auto-labeling for HIGH ACCURACY...")
+
+
+
+print(f"\n Step 3: Enhanced auto-labeling for HIGH ACCURACY...")
 
 # Use the enhanced labeling function
 project_labels = {}
@@ -520,21 +508,21 @@ for i in range(0, len(project_names), batch_size):
     
     print(f"   Enhanced processing: {min(i + batch_size, len(project_names))}/{len(project_names)} projects...")
 
-print(f"✅ Enhanced labeling complete:")
-print(f"   📊 Projects labeled: {labeled_count}")
-print(f"   ❓ Projects unknown: {unknown_count}")
+print(f" Enhanced labeling complete:")
+print(f"    Projects labeled: {labeled_count}")
+print(f"    Projects unknown: {unknown_count}")
 
 # Show label distribution
 success_count = sum(1 for label in project_labels.values() if label == 1)
 failure_count = sum(1 for label in project_labels.values() if label == 0)
 
-print(f"   ✅ Success projects: {success_count}")
-print(f"   ❌ Failure projects: {failure_count}")
+print(f"    Success projects: {success_count}")
+print(f"    Failure projects: {failure_count}")
 
-# ===================================
+
 # HIGH CONFIDENCE FILTERING
-# ===================================
-print(f"\n🔄 Step 4: High-confidence filtering for maximum accuracy...")
+
+print(f"\n Step 4: High-confidence filtering for maximum accuracy...")
 
 # Use higher confidence threshold for training
 HIGH_CONFIDENCE_THRESHOLD = 0.75  # Increased from 0.6
@@ -544,19 +532,19 @@ for project_name, label in project_labels.items():
     if label != -1 and project_confidences[project_name] >= HIGH_CONFIDENCE_THRESHOLD:
         confident_projects[project_name] = label
 
-print(f"✅ High-confidence projects (≥{HIGH_CONFIDENCE_THRESHOLD}): {len(confident_projects)}")
-print(f"   ✅ High-confidence success: {sum(1 for l in confident_projects.values() if l == 1)}")
-print(f"   ❌ High-confidence failure: {sum(1 for l in confident_projects.values() if l == 0)}")
+print(f" High-confidence projects (≥{HIGH_CONFIDENCE_THRESHOLD}): {len(confident_projects)}")
+print(f"   High-confidence success: {sum(1 for l in confident_projects.values() if l == 1)}")
+print(f"    High-confidence failure: {sum(1 for l in confident_projects.values() if l == 0)}")
 
 # If we have enough high-confidence samples, use them. Otherwise, lower threshold.
 if len(confident_projects) < 100:
-    print(f"⚠️  Only {len(confident_projects)} high-confidence projects. Lowering threshold to 0.65...")
+    print(f"  Only {len(confident_projects)} high-confidence projects. Lowering threshold to 0.65...")
     confident_projects = {}
     for project_name, label in project_labels.items():
         if label != -1 and project_confidences[project_name] >= 0.65:
             confident_projects[project_name] = label
     
-    print(f"✅ Confident projects (≥0.65): {len(confident_projects)}")
+    print(f" Confident projects (≥0.65): {len(confident_projects)}")
 
 # Show enhanced examples
 print(f"\n📋 Sample high-confidence labels:")
@@ -574,16 +562,16 @@ for project, label, conf, reasoning in high_conf_items[:5]:
 
 # %%
 import os
-# ===================================
+
 # MAXIMUM ACCURACY MODEL TRAINING
-# ===================================
+
 if len(confident_projects) >= 50:  # Minimum threshold
-    print(f"\n🔄 Step 5: Training MAXIMUM ACCURACY ensemble model...")
+    print(f"\n Step 5: Training MAXIMUM ACCURACY ensemble model...")
     
     project_names_list = list(confident_projects.keys())
     labels_list = list(confident_projects.values())
     
-    print(f"🎯 MAXIMUM ACCURACY training dataset:")
+    print(f" MAXIMUM ACCURACY training dataset:")
     print(f"   Total projects: {len(project_names_list)}")
     print(f"   Success projects: {labels_list.count(1)}")
     print(f"   Failure projects: {labels_list.count(0)}")
@@ -599,26 +587,26 @@ if len(confident_projects) >= 50:  # Minimum threshold
     X = enhanced_vectorizer.fit_transform(project_names_list)
     y = np.array(labels_list)
     
-    print(f"🔤 Feature matrix shape: {X.shape}")
-    print(f"📊 Running 10-fold cross-validation...")
+    print(f"Feature matrix shape: {X.shape}")
+    print(f"Running 10-fold cross-validation...")
     
     cv_scores = cross_val_score(ensemble_model, X, y, cv=cv_strategy, scoring='accuracy', n_jobs=-1)
     
-    print(f"📈 Cross-validation results:")
+    print(f" Cross-validation results:")
     print(f"   Mean accuracy: {cv_scores.mean():.4f}")
     print(f"   Std deviation: {cv_scores.std():.4f}")
     print(f"   Min accuracy: {cv_scores.min():.4f}")
     print(f"   Max accuracy: {cv_scores.max():.4f}")
     
     # Train final model on full dataset
-    print(f"🔄 Training final ensemble model...")
+    print(f" Training final ensemble model...")
     ensemble_model.fit(X, y)
     
     # Calculate training accuracy
     train_accuracy = ensemble_model.score(X, y)
     test_accuracy = cv_scores.mean()
     
-    print(f"🎯 Final model performance:")
+    print(f" Final model performance:")
     print(f"   Training accuracy: {train_accuracy:.4f}")
     print(f"   Cross-validation accuracy: {test_accuracy:.4f}")
     print(f"   Confidence interval: [{cv_scores.mean() - 2*cv_scores.std():.4f}, {cv_scores.mean() + 2*cv_scores.std():.4f}]")
@@ -676,9 +664,9 @@ if len(confident_projects) >= 50:  # Minimum threshold
     analysis_df.to_csv('/Users/nikitagrover/ml+proj/data/max_accuracy_analysis.csv', index=False)
     print(f"📊 Complete analysis saved to max_accuracy_analysis.csv")
     
-    # ===================================
+ 
     # ADVANCED PREDICTIONS AND TESTING
-    # ===================================
+
     print(f"\n🔮 Step 6: Advanced prediction testing...")
     
     # Test on comprehensive set of business project names
@@ -744,9 +732,9 @@ if len(confident_projects) >= 50:  # Minimum threshold
         except Exception as e:
             print(f"{test_project:<40} {'ERROR':<10} {str(e)[:10]}")
     
-    # ===================================
+   
     # COMPREHENSIVE VISUALIZATIONS
-    # ===================================
+   
     print(f"\n📊 Step 7: Creating comprehensive visualizations...")
     
     fig, axes = plt.subplots(3, 3, figsize=(20, 15))
@@ -875,27 +863,20 @@ Class Balance:
                 dpi=300, bbox_inches='tight')
     plt.show()
     
-    print(f"📊 Comprehensive visualizations saved!")
+    print(f" Comprehensive visualizations saved!")
     
-    print(f"\n🏆 MAXIMUM ACCURACY MODEL COMPLETE!")
+    print(f"\n MAXIMUM ACCURACY MODEL COMPLETE!")
     print(f"=" * 60)
-    print(f"🎯 Final Performance: {test_accuracy:.1%} accuracy")
-    print(f"📊 Training Data: {len(confident_projects):,} high-confidence projects")
-    print(f"🔤 Features: {X.shape[1]:,} TF-IDF features")
-    print(f"🤖 Model Type: Ensemble (RF + GB + LR)")
-    print(f"💾 Files Saved:")
+    print(f" Final Performance: {test_accuracy:.1%} accuracy")
+    print(f" Training Data: {len(confident_projects):,} high-confidence projects")
+    print(f" Features: {X.shape[1]:,} TF-IDF features")
+    print(f" Model Type: Ensemble (RF + GB + LR)")
+    print(f"Files Saved:")
     print(f"   • max_accuracy_project_classifier.pkl")
     print(f"   • max_accuracy_analysis.csv") 
     print(f"   • max_accuracy_analysis.png")
     
-    
-else:
-    print(f"❌ Insufficient high-confidence data for maximum accuracy training")
-    print(f"   Need at least 50, got {len(confident_projects)}")
-    print(f"💡 Try:")
-    print(f"   • Lowering confidence threshold to 0.6")
-    print(f"   • Adding more success/failure keywords")
-    print(f"   • Increasing MAX_PROJECTS to 25,000")
+
 
 
 
