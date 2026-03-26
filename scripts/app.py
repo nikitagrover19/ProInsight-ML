@@ -494,6 +494,10 @@ def home():
         }
     }
 
+@app.api_route("/ping", methods=["GET", "HEAD"])
+def ping():
+    return {"status": "alive"}
+
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health_check():
     """ProInsight health check."""
