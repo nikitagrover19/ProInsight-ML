@@ -472,7 +472,7 @@ async def startup_event():
 
 # --- API Endpoints ---
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def home():
     """ProInsight API home."""
     return {
@@ -494,7 +494,7 @@ def home():
         }
     }
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health_check():
     """ProInsight health check."""
     return {
