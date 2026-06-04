@@ -79,3 +79,21 @@ The project integrates **Google’s Gemini API** for:
 git clone https://github.com/nikitagrover19/ProInsight-ML.git
 cd ProInsight-ML
 cd scripts
+```
+
+## Design Decisions & Tradeoffs
+
+- **TF-IDF over dense embeddings**: Chose TF-IDF for interpretability and 
+speed on 72k emails. Tradeoff: loses semantic similarity. Would use 
+sentence-transformers if rebuilding.
+
+- **Gemini API**: Free tier sufficient for prototype. Tradeoff: latency 
+spikes on summarization. Would cache results with Redis in v2.
+
+- **FastAPI + Redis**: Redis for inference caching, cutting repeat query 
+latency by ~60%. Tradeoff: adds infra complexity for a prototype.
+
+## What I'd Do Differently
+- Replace TF-IDF with embeddings for semantic search
+- Add proper eval pipeline with golden Q&A set
+- Use async job queue for large batch processing
