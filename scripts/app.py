@@ -21,6 +21,13 @@ import json
 from datetime import datetime, timedelta
 import re
 import uuid
+from upstash_redis import Redis
+
+
+# Fallback in-memory store (used only if Redis is unavailable)
+project_storage_fallback = {}
+
+PROJECT_TTL_SECONDS = 60 * 60 * 24 * 7
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -29,8 +36,20 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
-# In-memory storage for project analyses
-project_storage = {}
+# --- Redis Setup ---
+UPSTASH_REDIS_URL = os.getenv("UPSTASH_REDIS_URL")
+UPSTASH_REDIS_TOKEN = os.getenv("UPSTASH_REDIS_TOKEN")
+
+redis_client = None
+if UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN:
+    try:
+        redis_client = Redis(url=UPSTASH_REDIS_URL, token=UPSTASH_REDIS_TOKEN)
+        logger.info("Connected to Upstash Redis")
+    except Exception as e:
+        logger.error(f" Redis connection failed, falling back to in-memory: {e}")
+else:
+    logger.warning("Redis env vars not set — using in-memory storage")
+    
 
 app = FastAPI(
     title="ProInsight - Project Analysis Dashboard API",
@@ -131,6 +150,54 @@ class InteractiveGraphResponse(BaseModel):
     stats: Dict
 
 # --- Helper Functions ---
+def storage_set(project_id: str, data: dict):
+    """Store project analysis in Redis, falling back to in-memory on failure."""
+    try:
+        if redis_client:
+            redis_client.set(f"project:{project_id}", json.dumps(data), ex=PROJECT_TTL_SECONDS)
+            return
+    except Exception as e:
+        logger.error(f"Redis set failed for {project_id}: {e}")
+    project_storage_fallback[project_id] = data
+
+def storage_get(project_id: str) -> Optional[dict]:
+    """Retrieve project analysis from Redis, falling back to in-memory."""
+    try:
+        if redis_client:
+            raw = redis_client.get(f"project:{project_id}")
+            if raw:
+                return json.loads(raw)
+    except Exception as e:
+        logger.error(f"Redis get failed for {project_id}: {e}")
+    return project_storage_fallback.get(project_id)
+
+def storage_list_recent(limit: int = 10) -> list:
+    """List recent projects. Note: Upstash free tier has no native SCAN-by-pattern
+    convenience here, so we maintain a separate sorted index."""
+    try:
+        if redis_client:
+            ids = redis_client.zrange("project_index", 0, limit - 1, rev=True)
+            results = []
+            for pid in ids:
+                data = storage_get(pid)
+                if data:
+                    results.append(data)
+            return results
+    except Exception as e:
+        logger.error(f"Redis list failed: {e}")
+    projects = list(project_storage_fallback.values())
+    projects.sort(key=lambda x: x["analysis_timestamp"], reverse=True)
+    return projects[:limit]
+
+def storage_index_add(project_id: str, timestamp: str):
+    """Add project to the sorted index for recent-projects lookups."""
+    try:
+        if redis_client:
+            score = datetime.fromisoformat(timestamp).timestamp()
+            redis_client.zadd("project_index", {project_id: score})
+    except Exception as e:
+        logger.error(f"Redis index add failed: {e}")
+
 def load_spacy_model():
     """Load spaCy model."""
     global nlp
@@ -489,8 +556,8 @@ def home():
         "supported_formats": ["CSV", "TXT", "EML", "MD", "LOG", "DOCX", "PDF"],
         "model_info": model_metadata,
         "storage_info": {
-            "type": "in-memory",
-            "note": "Data persists during session only (portfolio demo)"
+            "type": "redis" if redis_client else "in-memory",
+            "note": "Persistent storage via Upstash Redis" if redis_client else "Data persists during session only (portfolio demo)"
         }
     }
 
@@ -506,10 +573,11 @@ def health_check():
         "services": {
             "nlp_engine": nlp is not None,
             "ml_model": trained_model is not None,
-            "gemini_api": GEMINI_API_KEY is not None
+            "gemini_api": GEMINI_API_KEY is not None,
+            "redis": redis_client is not None
         },
         "ready": nlp is not None and trained_model is not None,
-        "projects_in_memory": len(project_storage)
+        "projects_tracked": len(project_storage_fallback) if not redis_client else "redis-backed"
     }
 
 @app.post("/project_insights", response_model=ProjectAnalysisResponse)
@@ -577,8 +645,9 @@ async def project_insights_analysis(
             "input_sources": input_sources
         }
         
-        project_storage[project_id] = analysis_data
-        logger.info(f"✅ Stored project {project_id}: {project_name}")
+        storage_set(project_id, analysis_data)
+        storage_index_add(project_id, analysis_data["analysis_timestamp"])
+        logger.info(f"Stored project {project_id}: {project_name}")
         
         return ProjectAnalysisResponse(**analysis_data)
         
@@ -589,24 +658,25 @@ async def project_insights_analysis(
 @app.get("/project_analysis/{project_id}")
 def get_project_analysis_by_id(project_id: str):
     """Get detailed project analysis by ID."""
-    if project_id not in project_storage:
+    analysis = storage_get(project_id)
+    if not analysis:
         raise HTTPException(
             status_code=404,
             detail=f"Project '{project_id}' not found. It may have been cleared from cache."
         )
     
-    return project_storage[project_id]
+    return analysis
 
 @app.get("/interactive_graph/{project_id}")
 def get_interactive_graph_data(project_id: str):
     """Get interactive graph data for visualization."""
-    if project_id not in project_storage:
+    analysis = storage_get(project_id)
+    if not analysis:
         raise HTTPException(
             status_code=404,
             detail=f"Project '{project_id}' not found. It may have been cleared from cache."
         )
     
-    analysis = project_storage[project_id]
     graph = analysis["knowledge_graph"]
     
     formatted_nodes = []
@@ -630,13 +700,13 @@ def get_interactive_graph_data(project_id: str):
 @app.get("/graph/{project_id}")
 def get_graph_data_by_id(project_id: str):
     """Get knowledge graph data by project ID."""
-    if project_id not in project_storage:
+    analysis = storage_get(project_id)
+    if not analysis:
         raise HTTPException(
             status_code=404,
             detail=f"Project '{project_id}' not found."
         )
     
-    analysis = project_storage[project_id]
     graph = analysis["knowledge_graph"]
     
     return {
@@ -649,8 +719,7 @@ def get_graph_data_by_id(project_id: str):
 @app.get("/projects/recent")
 def get_recent_projects(limit: int = Query(10, ge=1, le=50)):
     """Get recently analyzed projects."""
-    projects = list(project_storage.values())
-    projects.sort(key=lambda x: x["analysis_timestamp"], reverse=True)
+    projects = storage_list_recent(limit=limit)
     
     return {
         "projects": [
@@ -752,7 +821,7 @@ def send_project_emails(request: Dict):
 @app.get("/export_analysis/{project_id}")
 def export_project_analysis(project_id: str, format: str = Query("json", regex="^(json|csv|pdf)$")):
     """Export project analysis."""
-    if project_id not in project_storage:
+    if not storage_get(project_id):
         raise HTTPException(status_code=404, detail="Project not found")
     
     if format == "json":
