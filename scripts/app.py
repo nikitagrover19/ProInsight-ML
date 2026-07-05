@@ -22,6 +22,7 @@ from datetime import datetime, timedelta
 import re
 import uuid
 from upstash_redis import Redis
+from scripts.vector_store import store_chunks, search_similar_chunks
 
 
 # Fallback in-memory store (used only if Redis is unavailable)
@@ -88,7 +89,7 @@ model_metadata = None
 
 # Gemini API config
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
 # --- Enhanced Pydantic Models ---
 class ProjectAnalysisRequest(BaseModel):
@@ -498,6 +499,60 @@ def create_entity_summary(nodes: List[Dict]) -> List[EntitySummary]:
     
     return summaries
 
+def generate_rag_insights(combined_text: str, context_snippets: str, project_name: str) -> List[AIInsight]:
+    if not GEMINI_API_KEY:
+        logger.warning("GEMINI_API_KEY not set, falling back to rule-based insights")
+        return analyze_sentiment_and_extract_insights(combined_text, project_name)
+
+    safe_context = context_snippets[:2000] if context_snippets else "No similar past projects found."
+    safe_text = combined_text[:4000]
+
+    prompt = (
+        "You are analyzing a project called \"" + project_name + "\" for a project management dashboard.\n\n"
+        "CURRENT PROJECT CONTENT (truncated):\n" + safe_text + "\n\n"
+        "RELEVANT CONTEXT FROM SIMILAR PAST PROJECTS:\n" + safe_context + "\n\n"
+        "Based on the current project content and any relevant patterns from similar past projects, "
+        "generate 3-5 actionable insights. Only reference past-project patterns if they are genuinely "
+        "applicable to this specific project's actual content — do not force unrelated risks or "
+        "assumptions onto a project just because they appeared in a different past project.\n\n"
+        "Respond with ONLY a JSON array, no other text, no markdown code fences. "
+        "Each object must have exactly these fields: title (short, max 6 words), "
+        "description (1-2 sentences), type (either risk or opportunity), "
+        "confidence (a float between 0 and 1).\n\n"
+        "Example format: [{\"title\": \"Budget Risk\", \"description\": \"...\", "
+        "\"type\": \"risk\", \"confidence\": 0.8}]"
+    )
+
+    try:
+        response = requests.post(
+            f"{GEMINI_URL}?key={GEMINI_API_KEY}",
+            json={"contents": [{"parts": [{"text": prompt}]}]},
+            timeout=20
+        )
+        response.raise_for_status()
+        raw_text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+
+        cleaned = re.sub(r"^```json\s*|\s*```$", "", raw_text.strip())
+        parsed = json.loads(cleaned)
+
+        insights = []
+        for item in parsed[:5]:
+            insights.append(AIInsight(
+                title=item.get("title", "Insight"),
+                description=item.get("description", ""),
+                type=item.get("type", "opportunity") if item.get("type") in ("risk", "opportunity") else "opportunity",
+                confidence=float(item.get("confidence", 0.6))
+            ))
+
+        if not insights:
+            raise ValueError("Empty insights list from Gemini")
+
+        return insights
+
+    except Exception as e:
+        logger.error(f"RAG insight generation failed, falling back to rule-based: {e}")
+        return analyze_sentiment_and_extract_insights(combined_text, project_name)
+
 # --- Startup Event ---
 @app.on_event("startup")
 async def startup_event():
@@ -624,7 +679,11 @@ async def project_insights_analysis(
         
         graph_data = extract_comprehensive_knowledge_graph(combined_text, project_name)
         metrics = calculate_project_metrics(graph_data, combined_text, project_name)
-        insights = analyze_sentiment_and_extract_insights(combined_text, project_name)
+
+        similar = search_similar_chunks(combined_text, top_k=3, exclude_project_id=project_id)
+        context_snippets = "\n\n".join([s["text"] for s in similar])
+
+        insights = generate_rag_insights(combined_text, context_snippets, project_name)
         entity_summary = create_entity_summary(graph_data["nodes"])
         
         analyzed_communications = len(input_sources) * 5
@@ -646,6 +705,7 @@ async def project_insights_analysis(
         }
         
         storage_set(project_id, analysis_data)
+        store_chunks(project_id, project_name, combined_text)
         storage_index_add(project_id, analysis_data["analysis_timestamp"])
         logger.info(f"Stored project {project_id}: {project_name}")
         
