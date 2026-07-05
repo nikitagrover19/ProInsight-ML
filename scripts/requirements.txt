@@ -26,3 +26,4 @@ PyPDF2==3.0.1
 
 # Additional dependencies for deployment
 gunicorn==21.2.0
+upstash-redis
